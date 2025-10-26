@@ -115,8 +115,36 @@ export async function cloneRepoAndSuggestFiles(
       console.error(`  ✗ Error reading ${file}:`, error);
     }
   }
-  await compareFilesWithPrompt(userPrompt, fileContents);
+  const aiResult = await compareFilesWithPrompt(
+    userPrompt,
+    fileContents,
+    sandbox
+  );
+  if (aiResult.filesToModify?.length > 0) {
+    console.log("\n💾 Committing and pushing changes...");
 
+    await sandbox.commands.run(`git config --global user.name "hemanth-1321"`);
+    await sandbox.commands.run(
+      `git config --global user.email "hemanth02135@gmail.com"`
+    );
+    await sandbox.commands.run(`cd ${cloneDir} && git checkout -b ai-edits`);
+    await sandbox.commands.run(`cd ${cloneDir} && git add .`);
+    await sandbox.commands.run(
+      `cd ${cloneDir} && git commit -m "AI applied changes: ${userPrompt}" || echo "No changes to commit"`
+    );
+
+    const repoWithToken = repoUrl.replace(
+      "https://",
+      `https://${process.env.GITHUB_TOKEN}@`
+    );
+    await sandbox.commands.run(
+      `cd ${cloneDir} && git push ${repoWithToken} HEAD`
+    );
+
+    console.log("✅ Changes pushed to branch 'ai-edits'");
+  } else {
+    console.log("⚠️ No files modified by AI. Skipping commit.");
+  }
   console.log(`\n✓ Finished reading ${fileContents.size} files\n`);
 
   return {
