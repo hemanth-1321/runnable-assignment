@@ -2,20 +2,30 @@ import { Sandbox } from "@e2b/code-interpreter";
 import { compareFilesWithPrompt } from "./findrelavnt";
 
 const E2B_API_KEY = process.env.E2B_API_KEY;
-if (!E2B_API_KEY) {
-  throw new Error("E2B_API_KEY is not set in environment variables");
-}
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+
+if (!E2B_API_KEY) throw new Error("E2B_API_KEY is not set");
+if (!GITHUB_TOKEN) throw new Error("GITHUB_TOKEN is not set");
 
 export interface CloneResult {
   sandbox: Awaited<ReturnType<typeof Sandbox.create>>;
   cloneDir: string;
   candidateFiles: string[];
   keywords: string[];
+  prUrl?: string;
 }
+
+interface GitHubPRResponse {
+  html_url: string;
+  [key: string]: any;
+}
+
 export async function cloneRepoAndSuggestFiles(
   repoUrl: string,
   userPrompt: string,
-  baseDir = "/home/user/project"
+  baseDir = "/home/user/project",
+  upstreamRepoFullName?: string, // original repo
+  forkFullName?: string // your fork
 ): Promise<CloneResult> {
   console.log("Creating E2B sandbox...");
   const sandbox = await Sandbox.create({
@@ -27,8 +37,7 @@ export async function cloneRepoAndSuggestFiles(
   const repoName = repoUrl.split("/").pop()!.replace(".git", "");
   const cloneDir = `${baseDir}/${repoName}`;
 
-  // Check for git
-  console.log("Checking for git...");
+  // Ensure git is installed
   const gitCheck = await sandbox.commands.run("git --version", {
     timeoutMs: 15000,
   });
@@ -39,121 +48,139 @@ export async function cloneRepoAndSuggestFiles(
     });
   }
 
-  // Clone repository
-  console.log(`Cloning repo: ${repoUrl} into ${cloneDir}`);
+  // Clone the fork
   await sandbox.commands.run(`rm -rf ${baseDir}`);
   await sandbox.commands.run(`mkdir -p ${baseDir}`);
-
   const cloneResult = await sandbox.commands.run(
     `git clone ${repoUrl} ${cloneDir}`,
     { timeoutMs: 300000 }
   );
-  if (cloneResult.exitCode !== 0) {
-    console.error("Git clone stderr:", cloneResult.stderr);
-    throw new Error("Failed to clone repository");
-  }
+  if (cloneResult.exitCode !== 0)
+    throw new Error(`Failed to clone repo: ${cloneResult.stderr}`);
   console.log("✓ Repository cloned successfully!");
 
   // Extract keywords
-  console.log(`\n🎯 Analyzing prompt: "${userPrompt}"`);
   const keywords = extractKeywords(userPrompt);
-  console.log(`📝 Extracted keywords: ${keywords.join(", ")}`);
-
-  if (keywords.length === 0) {
-    console.warn("⚠️  No meaningful keywords extracted from prompt");
+  if (keywords.length === 0)
     return { sandbox, cloneDir, candidateFiles: [], keywords: [] };
-  }
-
-  // Search for files using grep
-  console.log(`\n🔍 Searching for files containing keywords...`);
   const pattern = keywords.join("\\|");
-  const grepCmd = `grep -rl "${pattern}" ${cloneDir} \
-    --exclude-dir=node_modules \
-    --exclude-dir=.git \
-    --exclude-dir=dist \
-    --exclude-dir=build \
-    --exclude-dir=.next \
-    --exclude-dir=coverage \
-    --exclude-dir=__pycache__ \
-    --exclude="*.log" \
-    --exclude="*.map" \
-    --exclude="*.lock" \
-    --exclude="package-lock.json" \
-    --exclude="yarn.lock" \
-    2>/dev/null || true`;
 
+  // Search files
+  const grepCmd = `grep -rl "${pattern}" ${cloneDir} --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=dist --exclude-dir=build --exclude-dir=.next --exclude-dir=coverage --exclude-dir=__pycache__ --exclude="*.log" --exclude="*.map" --exclude="*.lock" --exclude="package-lock.json" --exclude="yarn.lock" 2>/dev/null || true`;
   const searchResult = await sandbox.commands.run(grepCmd, {
     timeoutMs: 30000,
   });
 
   const foundFiles = searchResult.stdout
     .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-
-  console.log(`\n📁 Found ${foundFiles.length} matching files:`);
-  if (foundFiles.length === 0) {
-    console.log("  ⚠️  No files found matching keywords");
-    return { sandbox, cloneDir, candidateFiles: [], keywords };
-  }
-
+    .map((f) => f.trim())
+    .filter(Boolean);
   const candidateFiles = foundFiles.slice(0, 10);
-  candidateFiles.forEach((file, index) => {
-    console.log(`  ${index + 1}. ${file.replace(`${cloneDir}/`, "")}`);
-  });
 
-  // Read file contents and pass to LLM for comparison
-  console.log("\n📖 Reading and analyzing contents of matching files:");
+  // Read candidate file contents
   const fileContents = new Map<string, string>();
-
   for (const file of candidateFiles) {
     try {
       const content = await sandbox.files.read(file);
       fileContents.set(file, content);
-      console.log(`  ✓ Read ${file} (${content.length} bytes)}`);
-    } catch (error) {
-      console.error(`  ✗ Error reading ${file}:`, error);
+    } catch (err) {
+      console.error(`Failed to read file ${file}:`, err);
     }
   }
+
+  // Run AI to compare & update files
   const aiResult = await compareFilesWithPrompt(
     userPrompt,
     fileContents,
     sandbox
   );
+
+  let prUrl: string | undefined;
+
   if (aiResult.filesToModify?.length > 0) {
-    console.log("\n💾 Committing and pushing changes...");
+    console.log("💾 Committing and pushing AI changes...");
+    if (!upstreamRepoFullName || !forkFullName)
+      throw new Error("Missing upstream/fork info for PR");
+
+    const branchName = `ai-edits-${Date.now()}`;
 
     await sandbox.commands.run(`git config --global user.name "hemanth-1321"`);
     await sandbox.commands.run(
       `git config --global user.email "hemanth02135@gmail.com"`
     );
-    await sandbox.commands.run(`cd ${cloneDir} && git checkout -b ai-edits`);
+    await sandbox.commands.run(
+      `cd ${cloneDir} && git checkout -b ${branchName}`
+    );
+
+    // Write modified files
+    for (const file of aiResult.filesToModify) {
+      if (file.filePath && file.newContent) {
+        await sandbox.files.write(file.filePath, file.newContent);
+      }
+    }
+
+    // Commit & push
     await sandbox.commands.run(`cd ${cloneDir} && git add .`);
     await sandbox.commands.run(
       `cd ${cloneDir} && git commit -m "AI applied changes: ${userPrompt}" || echo "No changes to commit"`
     );
-
     const repoWithToken = repoUrl.replace(
       "https://",
-      `https://${process.env.GITHUB_TOKEN}@`
+      `https://${GITHUB_TOKEN}@`
     );
     await sandbox.commands.run(
-      `cd ${cloneDir} && git push ${repoWithToken} HEAD`
+      `cd ${cloneDir} && git push ${repoWithToken} HEAD:${branchName}`
     );
 
-    console.log("✅ Changes pushed to branch 'ai-edits'");
+    // Create PR on upstream
+    try {
+      const pr = await createPullRequest(
+        upstreamRepoFullName,
+        `${forkFullName.split("/")[0]}:${branchName}`,
+        `AI applied changes: ${userPrompt}`,
+        `This PR contains AI-suggested changes:\n\n${userPrompt}`
+      );
+      prUrl = pr.html_url;
+      console.log(`✅ Pull Request created: ${prUrl}`);
+    } catch (err) {
+      console.error("⚠️ Failed to create PR:", err);
+    }
   } else {
-    console.log("⚠️ No files modified by AI. Skipping commit.");
+    console.log("⚠️ No files modified by AI. Skipping commit and PR.");
   }
-  console.log(`\n✓ Finished reading ${fileContents.size} files\n`);
 
-  return {
-    sandbox,
-    cloneDir,
-    candidateFiles,
-    keywords,
-  };
+  return { sandbox, cloneDir, candidateFiles, keywords, prUrl };
 }
+
+// ------------------ PR CREATION ------------------
+
+async function createPullRequest(
+  repoFullName: string,
+  head: string,
+  title: string,
+  body: string
+): Promise<GitHubPRResponse> {
+  const response = await fetch(
+    `https://api.github.com/repos/${repoFullName}/pulls`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `token ${GITHUB_TOKEN}`,
+        Accept: "application/vnd.github+json",
+      },
+      body: JSON.stringify({ title, head, base: "main", body }),
+    }
+  );
+
+  const data = (await response.json()) as GitHubPRResponse;
+  if (!response.ok)
+    throw new Error(`Failed to create PR: ${JSON.stringify(data)}`);
+  if (!data.html_url) throw new Error("PR creation failed: html_url missing");
+
+  return data;
+}
+
+// ------------------ UTILS ------------------
 
 function extractKeywords(prompt: string): string[] {
   const stopWords = new Set([
@@ -180,12 +207,10 @@ function extractKeywords(prompt: string): string[] {
     "remove",
     "delete",
   ]);
-
   const words = prompt
     .toLowerCase()
-    .replace(/[^\w\s]/g, " ") // Remove punctuation
+    .replace(/[^\w\s]/g, " ")
     .split(/\s+/)
-    .filter((word) => word.length > 2 && !stopWords.has(word));
-
+    .filter((w) => w.length > 2 && !stopWords.has(w));
   return [...new Set(words)];
 }

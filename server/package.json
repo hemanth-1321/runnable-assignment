@@ -12,6 +12,7 @@
   "dependencies": {
     "@ai-sdk/google": "^2.0.23",
     "@e2b/code-interpreter": "^2.1.0",
+    "@octokit/rest": "^22.0.0",
     "ai": "^5.0.80"
   }
 }
