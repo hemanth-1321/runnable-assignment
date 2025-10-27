@@ -2,11 +2,13 @@ import express from "express";
 import { z } from "zod";
 import { Queue } from "bullmq";
 import IORedis from "ioredis";
+import cors from "cors";
 const REDIS_URL = process.env.REDIS_URL!;
 
 const app = express();
 app.use(express.json());
-
+app.use(cors());
+app.use(express.json());
 const connection = new IORedis(REDIS_URL);
 const jobQueue = new Queue("fork-edit-queue", { connection });
 
