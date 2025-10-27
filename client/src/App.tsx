@@ -26,7 +26,7 @@ export default function App(): React.ReactElement {
     setMessage({ type: "", text: "" });
 
     try {
-      const response = await fetch(`${LOCAL_URL}/create`, {
+      const response = await fetch(`${BACKEND_URL}/create`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
