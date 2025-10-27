@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import type { FormEvent } from "react";
 import { Github, Loader2, CheckCircle2, AlertCircle, Terminal } from "lucide-react";
-import { BACKEND_URL } from "./config";
+import { BACKEND_URL, LOCAL_URL } from "./config";
 
 interface MessageState {
   type: "success" | "error" | "";
@@ -26,7 +26,7 @@ export default function App(): React.ReactElement {
     setMessage({ type: "", text: "" });
 
     try {
-      const response = await fetch(`${BACKEND_URL}/create`, {
+      const response = await fetch(`${LOCAL_URL}/create`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -1,6 +1,6 @@
 import { Sandbox } from "@e2b/code-interpreter";
 import { compareFilesWithPrompt } from "./compareAndUpdateFiles";
-import { createPullRequest, extractKeywords } from "../utils/helper";
+import { createPullRequest } from "../utils/helper";
 
 const E2B_API_KEY = process.env.E2B_API_KEY;
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
@@ -11,8 +11,6 @@ if (!GITHUB_TOKEN) throw new Error("GITHUB_TOKEN is not set");
 export interface CloneResult {
   sandbox: Awaited<ReturnType<typeof Sandbox.create>>;
   cloneDir: string;
-  candidateFiles: string[];
-  keywords: string[];
   prUrl?: string;
 }
 
@@ -31,9 +29,7 @@ export async function cloneRepoAndSuggestFiles(
   const repoName = repoUrl.split("/").pop()!.replace(".git", "");
   const cloneDir = `${baseDir}/${repoName}`;
 
-  const gitCheck = await sandbox.commands.run("git --version", {
-    timeoutMs: 15000,
-  });
+  const gitCheck = await sandbox.commands.run("git --version", { timeoutMs: 15000 });
   if (gitCheck.exitCode !== 0) {
     await sandbox.commands.run("apt-get update -y && apt-get install -y git", {
       timeoutMs: 120000,
@@ -42,45 +38,14 @@ export async function cloneRepoAndSuggestFiles(
 
   await sandbox.commands.run(`rm -rf ${baseDir}`);
   await sandbox.commands.run(`mkdir -p ${baseDir}`);
-  const cloneResult = await sandbox.commands.run(
-    `git clone ${repoUrl} ${cloneDir}`,
-    { timeoutMs: 300000 }
-  );
-  if (cloneResult.exitCode !== 0)
-    throw new Error(`Failed to clone repo: ${cloneResult.stderr}`);
 
-  const keywords = extractKeywords(userPrompt);
-  if (keywords.length === 0)
-    return { sandbox, cloneDir, candidateFiles: [], keywords: [] };
-
-  const pattern = keywords.join("\\|");
-
-  const grepCmd = `grep -rl "${pattern}" ${cloneDir} --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=dist --exclude-dir=build --exclude-dir=.next --exclude-dir=coverage --exclude-dir=__pycache__ --exclude="*.log" --exclude="*.map" --exclude="*.lock" --exclude="package-lock.json" --exclude="yarn.lock" 2>/dev/null || true`;
-  const searchResult = await sandbox.commands.run(grepCmd, {
-    timeoutMs: 30000,
+  const cloneResult = await sandbox.commands.run(`git clone ${repoUrl} ${cloneDir}`, {
+    timeoutMs: 300000,
   });
+  if (cloneResult.exitCode !== 0) throw new Error(`Failed to clone repo: ${cloneResult.stderr}`);
 
-  const candidateFiles = searchResult.stdout
-    .split("\n")
-    .map((f) => f.trim())
-    .filter(Boolean)
-    .slice(0, 10);
+  const aiResult = await compareFilesWithPrompt(userPrompt, sandbox, cloneDir);
 
-  const fileContents = new Map<string, string>();
-  for (const file of candidateFiles) {
-    try {
-      const content = await sandbox.files.read(file);
-      fileContents.set(file, content);
-    } catch (err) {
-      console.error("error", err);
-    }
-  }
-
-  const aiResult = await compareFilesWithPrompt(
-    userPrompt,
-    fileContents,
-    sandbox
-  );
   let prUrl: string | undefined;
 
   if (aiResult.filesToModify?.length > 0) {
@@ -88,45 +53,65 @@ export async function cloneRepoAndSuggestFiles(
       throw new Error("Missing upstream/fork info for PR");
 
     const branchName = `ai-edits-${Date.now()}`;
-    await sandbox.commands.run(
-      `git config --global user.name ${process.env.GITHUB_USERNAME}`
-    );
-    await sandbox.commands.run(
-      `git config --global user.email ${process.env.GITHUB_EMAIL}`
-    );
-    await sandbox.commands.run(
-      `cd ${cloneDir} && git checkout -b ${branchName}`
-    );
 
+    await sandbox.commands.run(`git config --global user.name "${process.env.GITHUB_USERNAME}"`);
+    await sandbox.commands.run(`git config --global user.email "${process.env.GITHUB_EMAIL}"`);
+
+    await sandbox.commands.run(`cd ${cloneDir} && git checkout -b ${branchName}`);
+
+    let changesMade = false;
     for (const file of aiResult.filesToModify) {
-      if (file.filePath && file.newContent)
-        await sandbox.files.write(file.filePath, file.newContent);
+      if (file.filePath && file.newContent) {
+        try {
+          let oldContent = "";
+          try {
+            oldContent = await sandbox.files.read(file.filePath);
+          } catch {}
+          if (oldContent !== file.newContent) {
+            await sandbox.files.write(file.filePath, file.newContent);
+            changesMade = true;
+          }
+        } catch (err) {
+          console.error(`Failed to write file ${file.filePath}:`, err);
+        }
+      }
     }
 
-    await sandbox.commands.run(`cd ${cloneDir} && git add .`);
+    if (changesMade) {
+      await sandbox.commands.run(`cd ${cloneDir} && git add .`);
+      await sandbox.commands.run(
+        `cd ${cloneDir} && git commit -m "AI applied changes: ${userPrompt}"`
+      );
+    } else {
+      await sandbox.commands.run(
+        `cd ${cloneDir} && git commit --allow-empty -m "AI applied changes (no diff)"`
+      );
+    }
+
+    const forkOwner = forkFullName.split("/")[0];
+    const forkRepoUrl = repoUrl.replace("https://", `https://${GITHUB_TOKEN}@`);
     await sandbox.commands.run(
-      `cd ${cloneDir} && git commit -m "AI applied changes: ${userPrompt}" || echo "No changes to commit"`
+      `cd ${cloneDir} && git push ${forkRepoUrl} HEAD:${branchName} --force`
     );
-    const repoWithToken = repoUrl.replace(
-      "https://",
-      `https://${GITHUB_TOKEN}@`
-    );
-    await sandbox.commands.run(
-      `cd ${cloneDir} && git push ${repoWithToken} HEAD:${branchName}`
-    );
+
+      const status = await sandbox.commands.run(`cd ${cloneDir} && git status`);
+    const lastCommit = await sandbox.commands.run(`cd ${cloneDir} && git log -1 --oneline`);
+    console.log("Git Status:\n", status.stdout);
+    console.log("Last Commit:\n", lastCommit.stdout);
 
     try {
       const pr = await createPullRequest(
         upstreamRepoFullName,
-        `${forkFullName.split("/")[0]}:${branchName}`,
+        `${forkOwner}:${branchName}`,
         `AI applied changes: ${userPrompt}`,
         `This PR contains AI-suggested changes:\n\n${userPrompt}`
       );
       prUrl = pr.html_url;
-    } catch {
-      console.error("error creating pr");
+      console.log("PR created successfully:", prUrl);
+    } catch (err: any) {
+      console.error("PR creation failed:", err?.response?.data || err.message);
     }
   }
 
-  return { sandbox, cloneDir, candidateFiles, keywords, prUrl };
+  return { sandbox, cloneDir, prUrl };
 }
