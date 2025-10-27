@@ -17,7 +17,6 @@ export async function forkAndEditRepo(repoUrl: string, userPrompt: string) {
     const forkUrl = forkResp.data.clone_url;
     console.log(`Fork created: ${forkFullName} -> ${forkUrl}`);
 
-    // Wait for fork to be ready
     await new Promise((res) => setTimeout(res, 5000));
 
     const sandboxResult = await cloneRepoAndSuggestFiles(

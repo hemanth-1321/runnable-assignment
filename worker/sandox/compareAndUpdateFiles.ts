@@ -31,7 +31,7 @@ Focus on:
 
 Return only the improved version of the instruction.
     `,
-    temperature: 0.4,
+    temperature: 0.1,
   });
 
   const enrichedPrompt = enrichedPromptResult.text.trim();

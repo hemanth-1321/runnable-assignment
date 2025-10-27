@@ -4,7 +4,6 @@ import IORedis from "ioredis";
 
 const REDIS_URL = process.env.REDIS_URL!;
 
-// ✅ Fix: disable retries for BullMQ
 const connection = new IORedis(REDIS_URL, {
   maxRetriesPerRequest: null,
   enableReadyCheck: false,
@@ -32,11 +31,11 @@ const worker = new Worker(
 );
 
 worker.on("completed", (job) => {
-  console.log(`✅ Job ${job.id} completed successfully`);
+  console.log(`Job ${job.id} completed successfully`);
 });
 
 worker.on("failed", (job, err) => {
-  console.error(`❌ Job ${job?.id} failed:`, err);
+  console.error(` Job ${job?.id} failed:`, err);
 });
 
-console.log("🚀 Worker is running and listening for jobs...");
+console.log("Worker is running and listening for jobs...");
