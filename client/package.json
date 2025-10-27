@@ -11,10 +11,13 @@
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.16",
+    "axios": "^1.6.7",
     "client": ".",
+    "js-cookie": "^3.0.5",
     "lucide-react": "^0.548.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
+    "react-router-dom": "^6.22.2",
     "tailwindcss": "^4.1.16",
     "vite": "^7.1.7"
   },
