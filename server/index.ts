@@ -1,53 +1,35 @@
-import { cloneRepoAndSuggestFiles } from "./sandox/createsandbox";
-import { Octokit } from "@octokit/rest";
+import express from "express";
+import { z } from "zod";
+import { Queue } from "bullmq";
+import IORedis from "ioredis";
+const REDIS_URL = process.env.REDIS_URL!;
 
-const repoUrl = "https://github.com/Deepak7704/lovable";
-const token = process.env.GITHUB_TOKEN;
-const octokit = new Octokit({ auth: token });
+const app = express();
+app.use(express.json());
 
-async function forkAndEditRepo(repoUrl: string, userPrompt: string) {
-  const parts = repoUrl.replace("https://github.com/", "").split("/");
-  const owner = parts[0];
-  const repo = parts[1];
-  if (!owner || !repo) throw new Error("Invalid repo URL");
+const connection = new IORedis(REDIS_URL);
+const jobQueue = new Queue("fork-edit-queue", { connection });
 
-  console.log(`Forking ${owner}/${repo}...`);
-  const forkResp = await octokit.rest.repos.createFork({ owner, repo });
-  const forkFullName = forkResp.data.full_name; // e.g. your-username/lovable
-  const forkUrl = forkResp.data.clone_url;
-  console.log(`Fork created: ${forkFullName} -> ${forkUrl}`);
+const inputSchema = z.object({
+  githuburl: z.url(),
+  prompt: z.string().min(5),
+});
 
-  // Wait for fork to be ready
-  await new Promise((res) => setTimeout(res, 5000));
+app.post("/create", async (req, res) => {
+  try {
+    const { githuburl, prompt } = inputSchema.parse(req.body);
 
-  // Clone the fork and apply AI edits
-  const sandboxResult = await cloneRepoAndSuggestFiles(
-    forkUrl,
-    userPrompt,
-    "/home/user/project",
-    `${owner}/${repo}`, // upstream/original repo
-    forkFullName // your fork
-  );
+    const job = await jobQueue.add("fork-edit", { githuburl, prompt });
 
-  return {
-    sandbox: sandboxResult.sandbox,
-    forkFullName,
-    forkUrl,
-    prUrl: sandboxResult.prUrl,
-  };
-}
-
-(async () => {
-  const result = await forkAndEditRepo(
-    repoUrl,
-    "create a new zod schema for projectTreeSchema"
-  );
-
-  if (result) {
-    console.log(`Sandbox ready with ID: ${result.sandbox.sandboxId}`);
-    console.log(`Fork URL: ${result.forkUrl}`);
-    console.log(`Fork repo name: ${result.forkFullName}`);
-    if (result.prUrl) console.log(`Pull Request created: ${result.prUrl}`);
-    else console.log("No PR created (no AI changes).");
+    res.json({ success: true, jobId: job.id });
+  } catch (err: any) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ success: false, errors: err });
+    }
+    res.status(500).json({ success: false, error: err.message });
   }
-})();
+});
+
+app.listen(8000, () => {
+  console.log("Server running on port 8000");
+});

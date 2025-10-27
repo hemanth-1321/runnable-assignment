@@ -1,4 +1,4 @@
-# primary_backend
+# server
 
 To install dependencies:
 

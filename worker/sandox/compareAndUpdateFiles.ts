@@ -2,20 +2,40 @@ import { generateText } from "ai";
 import { google } from "@ai-sdk/google";
 import { Sandbox } from "@e2b/code-interpreter";
 import {
-  diffStrings,
   extractJsonFromText,
   formatFilesForAI,
-} from "../config/ai.cofig";
+  diffStrings,
+} from "../utils/helper";
 
-/**
- * Analyze files and safely apply modifications in the sandbox
- */
 export const compareFilesWithPrompt = async (
   prompt: string,
   fileContents: Map<string, string>,
   sandbox: Awaited<ReturnType<typeof Sandbox.create>>
 ) => {
   const filesSummary = formatFilesForAI(fileContents);
+
+  console.log("Enriching user prompt with Gemini...");
+  const enrichedPromptResult = await generateText({
+    model: google("gemini-2.0-flash-exp"),
+    prompt: `
+You are an expert software engineer.
+
+The user has given the following raw instruction:
+"${prompt}"
+
+Rewrite this as a clear, detailed, and actionable developer instruction for modifying a codebase.
+Focus on:
+- The user's intent
+- What needs to be added, changed, or optimized
+- Technical clarity and completeness
+
+Return only the improved version of the instruction.
+    `,
+    temperature: 0.4,
+  });
+
+  const enrichedPrompt = enrichedPromptResult.text.trim();
+  console.log("Enriched Prompt:", enrichedPrompt);
 
   const systemPrompt = `You are a code analysis agent. Analyze files and modify them based on the user's request.
 
@@ -38,7 +58,7 @@ Return JSON in this structure:
   "analysis": "overall analysis of the request"
 }`;
 
-  const userMessage = `User Request: ${prompt}\n\nFiles to analyze:\n${filesSummary}`;
+  const userMessage = `User Request: ${enrichedPrompt}\n\nFiles to analyze:\n${filesSummary}`;
 
   const { text } = await generateText({
     model: google("gemini-2.0-flash-exp"),
@@ -54,10 +74,14 @@ Return JSON in this structure:
       if (file.filePath && file.newContent) {
         try {
           const oldContent = await sandbox.files.read(file.filePath);
+
           if (oldContent !== file.newContent) {
-            await sandbox.files.write(`${file.filePath}.backup`, oldContent);
             const diff = diffStrings(oldContent, file.newContent);
+            console.log(`\n Changes for ${file.filePath}:\n${diff}\n`);
+
             await sandbox.files.write(file.filePath, file.newContent);
+
+            console.log(` File updated: ${file.filePath}`);
           }
         } catch (err) {
           console.error(`Failed to update file ${file.filePath}:`, err);
