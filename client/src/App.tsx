@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import type { FormEvent } from "react";
 import { AlertCircle, CheckCircle2, Github, Loader2 } from "lucide-react";
+import { BACKEND_URL } from "./config";
 
 // Type for success/error messages
 interface MessageState {
@@ -28,7 +29,7 @@ export default function App(): React.ReactElement {
     setMessage({ type: "", text: "" });
 
     try {
-      const response = await fetch("http://localhost:8000/create", {
+      const response = await fetch(`${BACKEND_URL}/create`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -160,10 +161,6 @@ export default function App(): React.ReactElement {
             </div>
           )}
         </div>
-
-        <p className="text-center text-xs text-gray-500 mt-4">
-          Jobs are processed asynchronously via BullMQ
-        </p>
       </div>
     </div>
   );
