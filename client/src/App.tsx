@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import type { FormEvent } from "react";
-import { AlertCircle, CheckCircle2, Github, Loader2 } from "lucide-react";
+import { Github, Loader2, CheckCircle2, AlertCircle, Terminal } from "lucide-react";
 import { BACKEND_URL } from "./config";
 
 interface MessageState {
@@ -20,7 +20,6 @@ export default function App(): React.ReactElement {
   const [loading, setLoading] = useState<boolean>(false);
   const [message, setMessage] = useState<MessageState>({ type: "", text: "" });
 
-  // Form submission handler
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
@@ -40,7 +39,7 @@ export default function App(): React.ReactElement {
       if (data.success) {
         setMessage({
           type: "success",
-          text: `Job created successfully. Job ID: ${data.jobId}`,
+          text: `Task created successfully. Job ID: ${data.jobId}`,
         });
         setGithubUrl("");
         setPrompt("");
@@ -57,109 +56,99 @@ export default function App(): React.ReactElement {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-2xl">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
-          <div className="flex items-center gap-3 mb-6">
-            <Github className="w-8 h-8 text-gray-900" />
-            <div>
-              <h1 className="text-2xl font-semibold text-gray-900">
-                GitHub Fork Editor
-              </h1>
-              <p className="text-sm text-gray-500 mt-1">
-                Fork and edit repositories with AI assistance
-              </p>
-            </div>
-          </div>
-
-          {/* FORM */}
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* GitHub URL input */}
-            <div>
-              <label
-                htmlFor="githuburl"
-                className="block text-sm font-medium text-gray-700 mb-2"
-              >
-                GitHub Repository URL
-              </label>
-              <input
-                type="url"
-                id="githuburl"
-                value={githubUrl}
-                onChange={(e) => setGithubUrl(e.target.value)}
-                placeholder="https://github.com/username/repository"
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md 
-                focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-
-            {/* Instructions textarea */}
-            <div>
-              <label
-                htmlFor="prompt"
-                className="block text-sm font-medium text-gray-700 mb-2"
-              >
-                Instructions
-              </label>
-              <textarea
-                id="prompt"
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                placeholder="Describe the changes you want to make..."
-                required
-                minLength={5}
-                rows={5}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md 
-                focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-              />
-            </div>
-
-            {/* Submit button */}
-            <button
-              type="submit"
-              disabled={loading || !githubUrl || prompt.length < 5}
-              className="w-full bg-gray-900 text-white py-2.5 px-4 rounded-md font-medium 
-              hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-900 
-              focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed 
-              transition-colors flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                "Submit Job"
-              )}
-            </button>
-          </form>
-
-          {/* Message */}
-          {message.text && (
-            <div
-              className={`mt-6 p-4 rounded-md flex items-start gap-3 ${
-                message.type === "success"
-                  ? "bg-green-50 border border-green-200"
-                  : "bg-red-50 border border-red-200"
-              }`}
-            >
-              {message.type === "success" ? (
-                <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-              ) : (
-                <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-              )}
-              <p
-                className={`text-sm ${
-                  message.type === "success" ? "text-green-800" : "text-red-800"
-                }`}
-              >
-                {message.text}
-              </p>
-            </div>
-          )}
+    <div className="min-h-screen bg-white text-gray-900 flex flex-col items-center justify-center px-6 py-12">
+      {/* HEADER */}
+      <div className="w-full max-w-2xl mb-10 text-center">
+        <div className="flex items-center justify-center gap-2 mb-3">
+          <Terminal className="w-6 h-6 text-gray-900" />
+          <h1 className="text-2xl font-semibold tracking-tight">
+            AI Code Agent
+          </h1>
         </div>
+        <p className="text-sm text-gray-500">
+          Automatically clone repositories, resolve issues, and create pull requests.
+        </p>
       </div>
+
+      {/* FORM */}
+      <form
+        onSubmit={handleSubmit}
+        className="w-full max-w-2xl flex flex-col gap-6"
+      >
+        {/* GitHub URL input */}
+        <div>
+          <label
+            htmlFor="githuburl"
+            className="block text-sm font-medium text-gray-700 mb-1"
+          >
+            GitHub Repository URL
+          </label>
+          <input
+            type="url"
+            id="githuburl"
+            value={githubUrl}
+            onChange={(e) => setGithubUrl(e.target.value)}
+            placeholder="https://github.com/username/repository"
+            required
+            className="w-full px-3 py-2 bg-gray-100 border border-transparent rounded-md text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-black"
+          />
+        </div>
+
+        {/* Prompt textarea */}
+        <div>
+          <label
+            htmlFor="prompt"
+            className="block text-sm font-medium text-gray-700 mb-1"
+          >
+            Instructions
+          </label>
+          <textarea
+            id="prompt"
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            placeholder="Describe the issue or change you want the agent to make..."
+            required
+            minLength={5}
+            rows={5}
+            className="w-full px-3 py-2 bg-gray-100 border border-transparent rounded-md text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-black resize-none"
+          />
+        </div>
+
+        {/* Submit button */}
+        <button
+          type="submit"
+          disabled={loading || !githubUrl || prompt.length < 5}
+          className="w-full bg-black text-white py-2.5 rounded-md font-medium hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-black disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
+        >
+          {loading ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Processing...
+            </>
+          ) : (
+            <>
+              <Github className="w-5 h-5" />
+              Run Agent
+            </>
+          )}
+        </button>
+      </form>
+
+      {/* Message */}
+      {message.text && (
+        <div
+          className={`mt-8 text-sm flex items-center gap-2 ${
+            message.type === "success" ? "text-green-600" : "text-red-600"
+          }`}
+        >
+          {message.type === "success" ? (
+            <CheckCircle2 className="w-4 h-4" />
+          ) : (
+            <AlertCircle className="w-4 h-4" />
+          )}
+          <span>{message.text}</span>
+        </div>
+      )}
     </div>
   );
 }
