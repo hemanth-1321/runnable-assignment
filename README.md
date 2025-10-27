@@ -41,7 +41,7 @@ It runs everything safely inside an **E2B sandbox**, powered by **BullMQ** worke
 
 ---
 
-## 🧩 Components
+## Components
 
 | Component       | Description                           |
 | --------------- | ------------------------------------- |
@@ -54,7 +54,7 @@ It runs everything safely inside an **E2B sandbox**, powered by **BullMQ** worke
 
 ---
 
-## ⚙️ Setup
+## Setup
 
 ### 1. Environment Variables
 
