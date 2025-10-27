@@ -118,7 +118,6 @@ if (Array.isArray(json.filesToModify)) {
       try {
         let fullPath = file.filePath;
         if (!fullPath.startsWith(repoPath)) {
-          // Remove leading slash if present
           const relativePath = fullPath.startsWith('/') 
             ? fullPath.slice(1) 
             : fullPath;
@@ -130,7 +129,6 @@ if (Array.isArray(json.filesToModify)) {
           oldContent = await sandbox.files.read(fullPath);
         } catch {
           console.log(`Creating new file: ${fullPath}`);
-          // Ensure parent directory exists
           const dirPath = fullPath.substring(0, fullPath.lastIndexOf('/'));
           if (dirPath) {
             await sandbox.commands.run(`mkdir -p "${dirPath}"`);
