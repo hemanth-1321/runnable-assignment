@@ -3,13 +3,11 @@ import type { FormEvent } from "react";
 import { AlertCircle, CheckCircle2, Github, Loader2 } from "lucide-react";
 import { BACKEND_URL } from "./config";
 
-// Type for success/error messages
 interface MessageState {
   type: "success" | "error" | "";
   text: string;
 }
 
-// Type for API response
 interface ApiResponse {
   success: boolean;
   jobId?: string;
