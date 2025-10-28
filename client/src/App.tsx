@@ -13,7 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { BACKEND_URL, LOCAL_URL } from "./config";
+import { BACKEND_URL } from "./config";
 
 interface MessageState {
   type: "success" | "error" | "" | "progress";
