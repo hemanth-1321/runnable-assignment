@@ -1,6 +1,12 @@
 import React, { useState } from "react";
 import type { FormEvent } from "react";
-import { Github, Loader2, CheckCircle2, AlertCircle, Terminal } from "lucide-react";
+import {
+  Github,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
+  Terminal,
+} from "lucide-react";
 import { BACKEND_URL, LOCAL_URL } from "./config";
 
 interface MessageState {
@@ -26,7 +32,7 @@ export default function App(): React.ReactElement {
     setMessage({ type: "", text: "" });
 
     try {
-      const response = await fetch(`${BACKEND_URL}/create`, {
+      const response = await fetch(`${LOCAL_URL}/create`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -66,7 +72,8 @@ export default function App(): React.ReactElement {
           </h1>
         </div>
         <p className="text-sm text-gray-500">
-          Automatically clone repositories, resolve issues, and create pull requests.
+          Automatically clone repositories, resolve issues, and create pull
+          requests.
         </p>
       </div>
 
