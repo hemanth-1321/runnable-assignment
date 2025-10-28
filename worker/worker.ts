@@ -12,6 +12,7 @@ const connection = new IORedis(REDIS_URL, {
 const worker = new Worker(
   "fork-edit-queue",
   async (job) => {
+    
     const { githuburl, prompt } = job.data;
     console.log(`Processing job ${job.id} for repo ${githuburl}`);
 

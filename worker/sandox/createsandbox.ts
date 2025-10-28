@@ -113,7 +113,6 @@ export async function cloneRepoAndSuggestFiles(
   const branchName = `ai-edits-${Date.now()}`;
   console.log(`Creating branch: ${branchName}`);
 
-  // Configure git
   await sandbox.commands.run(
     `git config --global user.name "${GITHUB_USERNAME}"`
   );
@@ -140,7 +139,6 @@ export async function cloneRepoAndSuggestFiles(
   if (commitResult.exitCode !== 0) {
     console.error("Commit failed:", commitResult.stderr);
 
-    // Try creating an empty commit if nothing to commit
     console.log("Creating empty commit as fallback...");
     await sandbox.commands.run(
       `cd ${cloneDir} && git commit --allow-empty -m "AI applied changes: ${userPrompt}"`
