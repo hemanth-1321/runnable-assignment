@@ -149,16 +149,14 @@ export default function App(): React.ReactElement {
     setSubmittedRepo(null);
   };
 
-  // Subtle blinking bar animation
   const Blinker = () => (
     <span className="inline-block w-0.5 h-4 bg-black animate-pulse ml-1" />
   );
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-white text-black px-6 py-12 font-mono relative">
-      {/* subtle vertical lines */}
-      <div className="absolute inset-y-0 left-1/5 w-px bg-gray-200"></div>
-      <div className="absolute inset-y-0 right-1/5 w-px bg-gray-200"></div>
+      <div className="absolute inset-y-0 left-1/5 w-px bg-gray-200 md:block"></div>
+      <div className="absolute inset-y-0 right-1/5 w-px bg-gray-200 md:block"></div>
 
       <div className="w-full max-w-2xl flex flex-col items-center text-center">
         {/* Header */}
